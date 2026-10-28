@@ -1,0 +1,470 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Interactive 3D viewer of the 608 fault surfaces in the SCEC Community Fault Model 7.0.">
+<style>
+:root { color-scheme: light; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); box-sizing: border-box; height: 100%; }
+body { margin: 0; }
+[hidden] { display: none !important; }
+</style>
+<title>CFM 7.0 Fault Explorer</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one-screen instrument — control rail on the left, 3D canvas filling the rest; stacks to canvas-over-panel on phones. */
+:root {
+  --bg: #eef0f2; --panel: #fbfcfc; --canvas: #e6eaee; --ink: #14181d; --ink-2: #4f5965; --muted: #7a8490;
+  --line: #d6dbe0; --chip: #eef1f4; --accent: #1f5fa8; --focus: #2a78d6;
+  --ss: #2a78d6; --rv: #eb6834; --nm: #1baf7a; --ot: #8a8984; --hl: #6250d6;
+  --set-pref: #2a78d6; --set-alt: #eb6834; --set-rup: #1baf7a;
+  --grid: #c5ccd3; --coast: #39424c;
+  --f-display: "Barlow Semi Condensed", "Arial Narrow", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1114; --panel: #151a1f; --canvas: #0b0e11; --ink: #e7eaed; --ink-2: #b3bcc6; --muted: #86909b;
+    --line: #262d35; --chip: #1c232a; --accent: #6da7ec; --focus: #6da7ec;
+    --ss: #3987e5; --rv: #d95926; --nm: #199e70; --ot: #8a8984; --hl: #9085e9;
+    --set-pref: #3987e5; --set-alt: #d95926; --set-rup: #199e70;
+    --grid: #253039; --coast: #a9b3bd; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1114; --panel: #151a1f; --canvas: #0b0e11; --ink: #e7eaed; --ink-2: #b3bcc6; --muted: #86909b;
+  --line: #262d35; --chip: #1c232a; --accent: #6da7ec; --focus: #6da7ec;
+  --ss: #3987e5; --rv: #d95926; --nm: #199e70; --ot: #8a8984; --hl: #9085e9;
+  --set-pref: #3987e5; --set-alt: #d95926; --set-rup: #199e70;
+  --grid: #253039; --coast: #a9b3bd; color-scheme: dark;
+}
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 14px; }
+.app {
+  height: 100%; box-sizing: border-box; display: grid; grid-template-columns: 330px minmax(0, 1fr); gap: 12px;
+  padding-block: 12px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.rail { min-width: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; padding-right: 4px; }
+header h1 { font-family: var(--f-display); font-weight: 700; font-size: 26px; line-height: 1.05; margin: 0; letter-spacing: .01em; text-wrap: balance; }
+header p { margin: 6px 0 0; color: var(--ink-2); font-size: 12.5px; line-height: 1.45; }
+.group { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.label { font-family: var(--f-display); font-weight: 600; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--chip); color: var(--ink);
+  border-radius: 999px; padding: 4px 10px 4px 8px; font: 500 12.5px var(--f-body); cursor: pointer; user-select: none; }
+.chip input { position: absolute; opacity: 0; pointer-events: none; }
+.chip .sw { width: 10px; height: 10px; border-radius: 3px; background: var(--c); box-shadow: 0 0 0 2px var(--panel); }
+.chip .n { font-family: var(--f-mono); font-size: 11px; color: var(--muted); }
+.chip:has(input:not(:checked)) { opacity: .45; }
+.chip:has(input:not(:checked)) .sw { background: transparent; outline: 1.5px solid var(--c); outline-offset: -1.5px; }
+.chip:has(input:focus-visible), select:focus-visible, input:focus-visible, button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.seg label { text-align: center; padding: 6px 4px; font-size: 12.5px; cursor: pointer; background: var(--chip); color: var(--ink-2); position: relative; }
+.seg label + label { border-left: 1px solid var(--line); }
+.seg input { position: absolute; opacity: 0; }
+.seg label:has(input:checked) { background: var(--panel); color: var(--ink); font-weight: 600; box-shadow: inset 0 -2px 0 var(--accent); }
+.seg label:has(input:focus-visible) { outline: 2px solid var(--focus); outline-offset: -2px; }
+select, input[type="search"] { width: 100%; box-sizing: border-box; background: var(--chip); color: var(--ink); border: 1px solid var(--line);
+  border-radius: 6px; padding: 7px 9px; font: 13px var(--f-body); }
+.slider { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center; }
+.slider output { font-family: var(--f-mono); font-size: 12.5px; min-width: 3ch; text-align: right; }
+input[type="range"] { width: 100%; accent-color: var(--accent); }
+.check { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--ink-2); }
+.check input { accent-color: var(--accent); }
+button { font: 500 13px var(--f-body); color: var(--ink); background: var(--chip); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; cursor: pointer; }
+button:hover { border-color: var(--muted); }
+.legend { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; color: var(--ink-2); }
+.legend .item { display: flex; align-items: center; gap: 8px; }
+.legend .sw { width: 22px; height: 8px; border-radius: 2px; background: var(--c); }
+.ramp { height: 10px; border-radius: 2px; }
+.ramp-ticks { display: flex; justify-content: space-between; font-family: var(--f-mono); font-size: 11px; color: var(--muted); }
+.card dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; margin: 0; font-size: 12.5px; }
+.card dt { color: var(--muted); }
+.card dd { margin: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.card h2 { font-family: var(--f-display); font-weight: 600; font-size: 19px; line-height: 1.15; margin: 0; text-wrap: balance; }
+.card .oid { font-family: var(--f-mono); font-size: 11px; color: var(--muted); overflow-wrap: anywhere; }
+.pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); background: var(--chip); }
+.pill .sw { width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
+.empty { color: var(--muted); font-size: 12.5px; line-height: 1.45; }
+.stage { position: relative; min-width: 0; min-height: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--canvas); }
+.stage canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+.hud { position: absolute; left: 12px; bottom: 10px; font-family: var(--f-mono); font-size: 11px; color: var(--ink-2); pointer-events: none;
+  background: color-mix(in srgb, var(--canvas) 80%, transparent); padding: 3px 6px; border-radius: 4px; font-variant-numeric: tabular-nums; }
+.compass { position: absolute; right: 12px; top: 12px; width: 44px; height: 44px; pointer-events: none; }
+.tip { position: absolute; pointer-events: none; background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 6px;
+  padding: 4px 8px; font-size: 12px; white-space: nowrap; box-shadow: 0 2px 10px rgb(0 0 0 / .12); transform: translate(12px, -50%); }
+.loading { position: absolute; inset: 0; display: grid; place-items: center; color: var(--ink-2); font-family: var(--f-mono); font-size: 12.5px; }
+.src { font-size: 11.5px; color: var(--muted); line-height: 1.45; }
+.src a { color: var(--accent); }
+@media (max-width: 760px) {
+  .app { grid-template-columns: minmax(0, 1fr); grid-template-rows: 58vh auto; height: auto; min-height: 100%; }
+  .stage { order: -1; }
+  .rail { overflow: visible; padding-right: 0; }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+
+</head>
+<body>
+<div class="app">
+  <aside class="rail" aria-label="Viewer controls">
+    <header>
+      <h1>CFM 7.0 Fault Explorer</h1>
+      <p>Triangulated 3D surfaces of the SCEC Community Fault Model, 2000&nbsp;m meshes in NAD27 / UTM&nbsp;11N. Drag to orbit, scroll to zoom, right-drag to pan. Click a fault for its metadata.</p>
+    </header>
+
+    <section class="group" aria-labelledby="l-find">
+      <span class="label" id="l-find">Find a fault</span>
+      <input type="search" id="search" list="faultlist" placeholder="e.g. San Andreas, Puente Hills" autocomplete="off">
+      <datalist id="faultlist"></datalist>
+    </section>
+
+    <section class="group" aria-labelledby="l-sets">
+      <span class="label" id="l-sets">Model sets</span>
+      <div class="row" id="sets"></div>
+      <label class="check"><input type="checkbox" id="cascadia" checked> Cascadia megathrust (to 100&nbsp;km depth)</label>
+    </section>
+
+    <section class="group" aria-labelledby="l-filter">
+      <span class="label" id="l-filter">Slip sense</span>
+      <div class="row" id="mechs"></div>
+      <span class="label" id="l-area">Fault area</span>
+      <select id="area" aria-labelledby="l-area"><option value="">All 19 areas</option></select>
+    </section>
+
+    <section class="group" aria-labelledby="l-color">
+      <span class="label" id="l-color">Colour by</span>
+      <div class="seg" role="radiogroup" aria-labelledby="l-color">
+        <label><input type="radio" name="colorby" value="mech" id="cb-mech" checked>Slip sense</label>
+        <label><input type="radio" name="colorby" value="depth" id="cb-depth">Depth</label>
+        <label><input type="radio" name="colorby" value="set" id="cb-set">Model set</label>
+      </div>
+      <div class="legend" id="legend"></div>
+      <span class="label" id="l-vex">Vertical exaggeration</span>
+      <div class="slider"><input type="range" id="vex" min="1" max="10" step="0.5" value="3" aria-labelledby="l-vex"><output id="vexout">3×</output></div>
+      <div class="row"><button id="reset" type="button">Reset view</button><button id="top" type="button">Map view</button></div>
+    </section>
+
+    <section class="group card" aria-live="polite" id="card">
+      <span class="label">Selected fault</span>
+      <p class="empty" id="card-empty">Hover over a surface to identify it; click to pin its details here.</p>
+      <div id="card-body" hidden></div>
+    </section>
+
+    <p class="src">Data: SCEC Community Fault Model 7.0, <a href="https://zenodo.org/records/13685611" target="_blank" rel="noopener">Zenodo 13685611</a> (2024). Outline: US Census cartographic boundary, 1:20M. Grid cells are 100&nbsp;km.</p>
+  </aside>
+
+  <main class="stage" id="stage">
+    <div class="loading" id="loading">Loading 342,638 triangles…</div>
+    <svg class="compass" viewBox="-22 -22 44 44" aria-hidden="true"><circle r="20" fill="var(--panel)" stroke="var(--line)"/><path id="needle" d="M0,-15 L5,2 L0,-2 L-5,2 Z" fill="var(--ink)"/><text id="nlabel" y="-6" text-anchor="middle" font-size="7" fill="var(--panel)" font-family="var(--f-mono)" style="display:none">N</text></svg>
+    <div class="hud" id="hud"></div>
+    <div class="tip" id="tip" hidden></div>
+  </main>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(async function () {
+  const $ = (id) => document.getElementById(id);
+  const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  const SETS = [
+    { key: "preferred", label: "Preferred", token: "--set-pref" },
+    { key: "alternatives", label: "Alternatives", token: "--set-alt" },
+    { key: "ruptures", label: "Ruptures", token: "--set-rup" },
+  ];
+  const MECHS = [
+    { key: "Strike-slip", token: "--ss" }, { key: "Reverse / thrust", token: "--rv" },
+    { key: "Normal", token: "--nm" }, { key: "Other", token: "--ot" },
+  ];
+  const SLIP_WORDS = { rlss: "right-lateral strike-slip", llss: "left-lateral strike-slip", r: "reverse", n: "normal",
+    orlr: "oblique right-lateral reverse", ollr: "oblique left-lateral reverse", orln: "oblique right-lateral normal",
+    olln: "oblique left-lateral normal", olrr: "oblique right-lateral reverse (coded olrr)", "rlss,llss": "right- and left-lateral" };
+  const CASCADIA = "CASC-CASC-FRNT-Cascadia_Subduction_Megathrust-CFM7";
+  const DEPTH_STOPS = ["#cde2fb", "#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#184f95", "#0d366b"];
+  const DEPTH_MAX = 30;
+
+  // ---------- data
+  const [meta, coast] = await Promise.all([fetch("data/faults.json").then(r => r.json()), fetch("data/coast.json").then(r => r.json())]);
+  const b64 = (str) => { const bin = atob(str), out = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i); return out.buffer; };
+  const bufs = await Promise.all(SETS.map(s => fetch(`data/${s.key}.mesh.json`).then(r => r.json()).then(j => [b64(j.pos), b64(j.idx)])));
+  const faults = meta.faults;
+  faults.forEach((f, i) => f.i = i);
+  const bySet = Object.fromEntries(SETS.map(s => [s.key, faults.filter(f => f.set === s.key)]));
+
+  // ---------- scene
+  const stage = $("stage");
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  stage.appendChild(renderer.domElement);
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(40, 1, 1, 20000);
+  const controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true; controls.dampingFactor = 0.12; controls.screenSpacePanning = true;
+  controls.maxPolarAngle = Math.PI * 0.495;
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x8899aa, 0.75));
+  const sun = new THREE.DirectionalLight(0xffffff, 0.55); sun.position.set(-0.6, 1, 0.5); scene.add(sun);
+
+  const vexGroup = new THREE.Group(); scene.add(vexGroup);
+  const world = new THREE.Group(); world.rotation.x = -Math.PI / 2; vexGroup.add(world);  // data x=E, y=N, z=up
+
+  const meshes = {};
+  SETS.forEach((s, k) => {
+    const pos = new Float32Array(bufs[k][0]), idx = new Uint32Array(bufs[k][1]);
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    g.setAttribute("color", new THREE.BufferAttribute(new Float32Array(pos.length), 3));
+    g.setIndex(new THREE.BufferAttribute(idx, 1));
+    g.computeVertexNormals();
+    const m = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
+    m.userData = { set: s.key, fullIndex: idx, faults: bySet[s.key] };
+    world.add(m); meshes[s.key] = m;
+  });
+
+  const coastMat = new THREE.LineBasicMaterial({ color: 0x000000 });
+  coast.forEach(line => {
+    const g = new THREE.BufferGeometry().setFromPoints(line.map(([x, y]) => new THREE.Vector3(x, y, 0.05)));
+    world.add(new THREE.Line(g, coastMat));
+  });
+  let grid;
+  function makeGrid() {
+    if (grid) scene.remove(grid);
+    grid = new THREE.GridHelper(1600, 16, css("--grid"), css("--grid"));
+    grid.position.set(0, -0.2, 100); scene.add(grid);
+  }
+
+  // ---------- state
+  const state = {
+    sets: { preferred: true, alternatives: false, ruptures: false },
+    mechs: { "Strike-slip": true, "Reverse / thrust": true, "Normal": true, "Other": true },
+    area: "", cascadia: true, colorBy: "mech", vex: 3, hover: null, selected: null,
+  };
+
+  // ---------- controls UI
+  function chip(container, { key, label, token, count, checked, onChange }) {
+    const l = document.createElement("label"); l.className = "chip"; l.style.setProperty("--c", `var(${token})`);
+    const i = document.createElement("input"); i.type = "checkbox"; i.checked = checked; i.id = `chip-${key.replace(/\W+/g, "-")}`;
+    i.addEventListener("change", () => onChange(i.checked));
+    const sw = document.createElement("span"); sw.className = "sw";
+    const t = document.createElement("span"); t.textContent = label;
+    const n = document.createElement("span"); n.className = "n"; n.textContent = count;
+    l.append(i, sw, t, n); container.append(l);
+  }
+  SETS.forEach(s => chip($("sets"), { ...s, count: bySet[s.key].length, checked: state.sets[s.key],
+    onChange: v => { state.sets[s.key] = v; applyFilter(); } }));
+  MECHS.forEach(m => {
+    const n = faults.filter(f => f.mech === m.key).length;
+    if (n) chip($("mechs"), { ...m, label: m.key, count: n, checked: true, onChange: v => { state.mechs[m.key] = v; applyFilter(); } });
+  });
+  const areas = [...new Map(faults.map(f => [f.areaCode, f.area])).entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  areas.forEach(([code, name]) => { const o = document.createElement("option"); o.value = code; o.textContent = `${name} (${code})`; $("area").append(o); });
+  $("area").addEventListener("change", e => { state.area = e.target.value; applyFilter(); if (state.area) frameFaults(visibleFaults()); });
+  $("cascadia").addEventListener("change", e => { state.cascadia = e.target.checked; applyFilter(); });
+  document.querySelectorAll('input[name="colorby"]').forEach(r => r.addEventListener("change", e => { state.colorBy = e.target.value; recolor(); }));
+  $("vex").addEventListener("input", e => { state.vex = +e.target.value; $("vexout").textContent = `${state.vex}×`; vexGroup.scale.y = state.vex; });
+  $("reset").addEventListener("click", () => resetView());
+  $("top").addEventListener("click", () => { const t = controls.target; animateTo(t.clone(), new THREE.Vector3(t.x, t.y + camera.position.distanceTo(t), t.z + 1)); });
+
+  const dl = $("faultlist");
+  const nameIndex = new Map();
+  faults.forEach(f => { const label = `${f.name} — ${f.id}`; nameIndex.set(label, f); const o = document.createElement("option"); o.value = label; dl.append(o); });
+  $("search").addEventListener("change", e => {
+    const v = e.target.value.trim(); if (!v) return;
+    let f = nameIndex.get(v);
+    if (!f) { const q = v.toLowerCase(); f = faults.find(x => x.name.toLowerCase().includes(q) || x.id.toLowerCase().includes(q)); }
+    if (!f) return;
+    if (!state.sets[f.set]) { state.sets[f.set] = true; $(`chip-${f.set}`).checked = true; }
+    if (!state.mechs[f.mech]) { state.mechs[f.mech] = true; $(`chip-${f.mech.replace(/\W+/g, "-")}`).checked = true; }
+    if (state.area && state.area !== f.areaCode) { state.area = ""; $("area").value = ""; }
+    applyFilter(); select(f); frameFaults([f]);
+  });
+
+  // ---------- filtering & colour
+  const isVisible = f => state.sets[f.set] && state.mechs[f.mech] && (!state.area || f.areaCode === state.area) && (state.cascadia || f.id !== CASCADIA);
+  const visibleFaults = () => faults.filter(isVisible);
+  function applyFilter() {
+    let tris = 0, n = 0;
+    SETS.forEach(s => {
+      const m = meshes[s.key], full = m.userData.fullIndex;
+      const vis = m.userData.faults.filter(isVisible);
+      const total = vis.reduce((a, f) => a + f.tn * 3, 0);
+      const idx = new Uint32Array(total); let o = 0;
+      vis.forEach(f => { idx.set(full.subarray(f.t0 * 3, (f.t0 + f.tn) * 3), o); o += f.tn * 3; });
+      m.geometry.setIndex(new THREE.BufferAttribute(idx, 1));
+      m.userData.visible = vis; m.visible = vis.length > 0;
+      tris += total / 3; n += vis.length;
+    });
+    $("hud").textContent = `${n} faults · ${tris.toLocaleString()} triangles`;
+    if (state.selected && !isVisible(state.selected)) select(null);
+  }
+  const rgb = hex => new THREE.Color(hex);
+  function depthColor(depth, out) {
+    const t = Math.min(Math.max(depth / DEPTH_MAX, 0), 1) * (DEPTH_STOPS.length - 1);
+    const i = Math.min(Math.floor(t), DEPTH_STOPS.length - 2);
+    out.copy(rgb(DEPTH_STOPS[i])).lerp(rgb(DEPTH_STOPS[i + 1]), t - i); return out;
+  }
+  function paintFault(f, highlight) {
+    const m = meshes[f.set], col = m.geometry.attributes.color.array, pos = m.geometry.attributes.position.array;
+    const c = new THREE.Color();
+    const flat = highlight ? rgb(css("--hl")) : state.colorBy === "mech" ? rgb(css(MECHS.find(x => x.key === f.mech).token))
+      : state.colorBy === "set" ? rgb(css(SETS.find(x => x.key === f.set).token)) : null;
+    for (let v = f.v0; v < f.v0 + f.vn; v++) {
+      if (flat) c.copy(flat); else depthColor(-pos[v * 3 + 2], c);
+      col[v * 3] = c.r; col[v * 3 + 1] = c.g; col[v * 3 + 2] = c.b;
+    }
+    m.geometry.attributes.color.needsUpdate = true;
+  }
+  function recolor() {
+    faults.forEach(f => paintFault(f, f === state.selected || f === state.hover));
+    renderer.setClearColor(css("--canvas"));
+    coastMat.color.set(css("--coast"));
+    makeGrid(); drawLegend();
+  }
+  function drawLegend() {
+    const L = $("legend"); L.replaceChildren();
+    if (state.colorBy === "depth") {
+      const r = document.createElement("div"); r.className = "ramp"; r.style.background = `linear-gradient(90deg, ${DEPTH_STOPS.join(",")})`;
+      const t = document.createElement("div"); t.className = "ramp-ticks";
+      ["0", "10", "20", "30+ km"].forEach(s => { const e = document.createElement("span"); e.textContent = s; t.append(e); });
+      L.append(r, t); return;
+    }
+    const items = state.colorBy === "mech" ? MECHS.filter(m => faults.some(f => f.mech === m.key)).map(m => [m.key, m.token])
+      : SETS.map(s => [s.label, s.token]);
+    items.forEach(([label, token]) => {
+      const d = document.createElement("div"); d.className = "item";
+      const sw = document.createElement("span"); sw.className = "sw"; sw.style.setProperty("--c", `var(${token})`);
+      const t = document.createElement("span"); t.textContent = label; d.append(sw, t); L.append(d);
+    });
+  }
+
+  // ---------- picking
+  const ray = new THREE.Raycaster(), mouse = new THREE.Vector2();
+  function pick(ev) {
+    const r = renderer.domElement.getBoundingClientRect();
+    mouse.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
+    ray.setFromCamera(mouse, camera);
+    const hit = ray.intersectObjects(Object.values(meshes).filter(m => m.visible), false)[0];
+    if (!hit) return null;
+    // faceIndex counts triangles in the filtered index; walk the visible fault blocks
+    let t = hit.faceIndex;
+    for (const f of hit.object.userData.visible) { if (t < f.tn) return f; t -= f.tn; }
+    return null;
+  }
+  function setHover(f, ev) {
+    const tip = $("tip");
+    if (f && ev) { tip.textContent = f.name; tip.hidden = false; const r = stage.getBoundingClientRect(); tip.style.left = `${ev.clientX - r.left}px`; tip.style.top = `${ev.clientY - r.top}px`; }
+    else tip.hidden = true;
+    if (f === state.hover) return;
+    const old = state.hover; state.hover = f;
+    if (old && old !== state.selected) paintFault(old, false);
+    if (f) paintFault(f, true);
+    if (!state.selected) showCard(f);
+    renderer.domElement.style.cursor = f ? "pointer" : "";
+  }
+  function select(f) {
+    const old = state.selected; state.selected = f;
+    if (old && old !== state.hover) paintFault(old, false);
+    if (f) paintFault(f, true);
+    showCard(f);
+  }
+  let lastMove = 0, dragging = false, down = null;
+  renderer.domElement.addEventListener("pointermove", ev => {
+    if (down && Math.hypot(ev.clientX - down[0], ev.clientY - down[1]) > 4) dragging = true;
+    if (dragging || ev.pointerType === "touch") return;
+    const now = performance.now(); if (now - lastMove < 70) return; lastMove = now;
+    setHover(pick(ev), ev);
+  });
+  renderer.domElement.addEventListener("pointerleave", () => setHover(null));
+  renderer.domElement.addEventListener("pointerdown", ev => { down = [ev.clientX, ev.clientY]; dragging = false; });
+  renderer.domElement.addEventListener("pointerup", ev => {
+    if (!dragging && down) select(pick(ev));
+    down = null; dragging = false;
+  });
+
+  // ---------- info card
+  const fmt = (v, d = 0, u = "") => (v === null || v === undefined || Number.isNaN(v)) ? "—" : `${(+v).toFixed(d)}${u}`;
+  function showCard(f) {
+    const body = $("card-body");
+    $("card-empty").hidden = !!f; body.hidden = !f; body.replaceChildren();
+    if (!f) return;
+    const h = document.createElement("h2"); h.textContent = f.name;
+    const id = document.createElement("div"); id.className = "oid"; id.textContent = f.id;
+    const pills = document.createElement("div"); pills.className = "row";
+    const mk = (label, token) => { const p = document.createElement("span"); p.className = "pill"; p.style.setProperty("--c", `var(${token})`);
+      const s = document.createElement("span"); s.className = "sw"; const t = document.createElement("span"); t.textContent = label; p.append(s, t); return p; };
+    pills.append(mk(f.mech, MECHS.find(m => m.key === f.mech).token), mk(SETS.find(s => s.key === f.set).label, SETS.find(s => s.key === f.set).token), mk(f.exposure, "--muted"));
+    const d = document.createElement("dl");
+    [["Slip sense", `${f.slip} · ${SLIP_WORDS[f.slip] || f.slip}`], ["Fault area", `${f.area} (${f.areaCode})`], ["Zone", f.zone], ["Section", f.section],
+     ["Dip / strike", `${fmt(f.dip, 0, "°")} / ${fmt(f.strike, 0, "°")}`], ["Surface area", `${(+f.areaKm2).toLocaleString()} km²`],
+     ["Depth range", `${fmt(f.topKm, 1)} to ${fmt(f.bottomKm, 1)} km`], ["Last update", f.version], ["Source", f.source], ["USGS ID", f.usgs ?? "—"]]
+      .forEach(([k, v]) => { const dt = document.createElement("dt"); dt.textContent = k; const dd = document.createElement("dd"); dd.textContent = v; d.append(dt, dd); });
+    const row = document.createElement("div"); row.className = "row";
+    const z = document.createElement("button"); z.type = "button"; z.textContent = "Zoom to fault"; z.addEventListener("click", () => frameFaults([f]));
+    row.append(z);
+    if (state.selected === f) { const c = document.createElement("button"); c.type = "button"; c.textContent = "Clear"; c.addEventListener("click", () => select(null)); row.append(c); }
+    body.append(h, id, pills, d, row);
+  }
+
+  // ---------- camera
+  function bboxOf(list) {
+    const b = new THREE.Box3();
+    list.forEach(f => { const p = meshes[f.set].geometry.attributes.position.array;
+      for (let v = f.v0; v < f.v0 + f.vn; v += Math.max(1, Math.floor(f.vn / 200))) b.expandByPoint(new THREE.Vector3(p[v * 3], p[v * 3 + 1], p[v * 3 + 2])); });
+    return b;
+  }
+  function toWorld(v) { return new THREE.Vector3(v.x, v.z * state.vex, -v.y); }
+  function frameFaults(list) {
+    if (!list.length) return;
+    const b = bboxOf(list), c = toWorld(b.getCenter(new THREE.Vector3()));
+    const size = Math.max(b.max.x - b.min.x, b.max.y - b.min.y, (b.max.z - b.min.z) * state.vex, 60);
+    const dir = camera.position.clone().sub(controls.target).normalize();
+    animateTo(c, c.clone().add(dir.multiplyScalar(size * 2.6)));
+  }
+  let anim = null;
+  function animateTo(target, pos) {
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    anim = { t0: performance.now(), dur: reduce ? 0 : 700, fromT: controls.target.clone(), fromP: camera.position.clone(), toT: target, toP: pos };
+  }
+  function resetView() { animateTo(new THREE.Vector3(0, -10, 80), new THREE.Vector3(-640, 980, 1260)); }
+
+  // ---------- render loop
+  function resize() {
+    const w = stage.clientWidth, h = stage.clientHeight;
+    renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+  }
+  new ResizeObserver(resize).observe(stage);
+  const needle = $("needle");
+  function loop(now) {
+    if (anim) {
+      const k = anim.dur ? Math.min((now - anim.t0) / anim.dur, 1) : 1, e = k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+      controls.target.lerpVectors(anim.fromT, anim.toT, e); camera.position.lerpVectors(anim.fromP, anim.toP, e);
+      if (k >= 1) anim = null;
+    }
+    controls.update();
+    const az = Math.atan2(camera.position.x - controls.target.x, camera.position.z - controls.target.z);
+    needle.setAttribute("transform", `rotate(${(-az * 180 / Math.PI) + 180})`);
+    renderer.render(scene, camera);
+    requestAnimationFrame(loop);
+  }
+
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", recolor);
+  new MutationObserver(recolor).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+  vexGroup.scale.y = state.vex;
+  camera.position.set(-640, 980, 1260); controls.target.set(0, -10, 80);
+  resize(); applyFilter(); recolor();
+  $("loading").remove();
+  requestAnimationFrame(loop);
+})().catch(err => {
+  const l = document.getElementById("loading");
+  if (l) l.textContent = "The fault meshes failed to load. Reload the page to try again. (" + err.message + ")";
+  console.error(err);
+});
+</script>
+
+</body>
+</html>
